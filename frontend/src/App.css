@@ -2,7 +2,7 @@
 
 :root {
   font-family: "Inter", Arial, sans-serif;
-  color: #172033;
+  color: #000000;
   background: #f4f7fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -132,7 +132,7 @@ button:disabled {
 }
 
 .eyebrow {
-  color: #64748b;
+  color: #000000;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 1.5px;
@@ -146,7 +146,7 @@ button:disabled {
 }
 
 .subtitle {
-  color: #748198;
+  color: #000000;
   margin: 10px 0 0;
   font-size: 14px;
 }
@@ -214,7 +214,7 @@ button:disabled {
 
 .stat-card p {
   margin: 0 0 8px;
-  color: #748198;
+  color: #000000;
   font-size: 12px;
 }
 
@@ -243,7 +243,7 @@ button:disabled {
 }
 
 .panel-heading p {
-  color: #7a879a;
+  color: #000000;
   margin: 7px 0 0;
   font-size: 13px;
 }
@@ -261,7 +261,7 @@ button:disabled {
   border-radius: 9px;
   outline: none;
   background: white;
-  color: #172033;
+  color: #000000;
 }
 
 .search-input {
@@ -291,7 +291,7 @@ thead {
 }
 
 th {
-  color: #64748b;
+  color: #000000;
   font-size: 11px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -314,7 +314,7 @@ tbody tr:hover {
 
 .barcode-cell {
   font-family: Consolas, monospace;
-  color: #53647e;
+  color: #000000;
 }
 
 .stock-badge {
@@ -358,7 +358,7 @@ tbody tr:hover {
 
 .secondary-button {
   background: #eef2f7;
-  color: #334155;
+  color: #000000;
 }
 
 .form-panel {
@@ -372,7 +372,7 @@ tbody tr:hover {
   width: 36px;
   height: 36px;
   font-size: 24px;
-  color: #475569;
+  color: #000000;
 }
 
 .form-grid {
@@ -386,7 +386,7 @@ tbody tr:hover {
   gap: 9px;
   font-size: 13px;
   font-weight: 700;
-  color: #475569;
+  color: #000000;
 }
 
 .form-actions {
@@ -426,16 +426,16 @@ tbody tr:hover {
 .empty-state {
   text-align: center;
   padding: 55px 20px;
-  color: #64748b;
+  color: #000000;
 }
 
 .empty-icon {
   font-size: 42px;
-  color: #94a3b8;
+  color: #000000;
 }
 
 .empty-state h3 {
-  color: #1e293b;
+  color: #000000;
   margin-bottom: 8px;
 }
 
@@ -445,7 +445,7 @@ tbody tr:hover {
 }
 
 .page-footer {
-  color: #94a3b8;
+  color: #000000;
   text-align: center;
   font-size: 12px;
   padding: 12px;
@@ -576,16 +576,16 @@ tbody tr:hover {
   justify-content: space-between;
   gap: 20px;
   padding: 14px 0;
-  color: #64748b;
+  color: #000000;
   border-bottom: 1px solid #edf0f5;
 }
 
 .summary-row strong {
-  color: #172033;
+  color: #000000;
 }
 
 .total-row {
-  color: #172033;
+  color: #000000;
   font-size: 20px;
   border-bottom: 0;
   padding-top: 20px;
@@ -601,7 +601,7 @@ tbody tr:hover {
   margin-top: 20px;
   font-size: 13px;
   font-weight: 700;
-  color: #475569;
+  color: #000000;
 }
 
 .payment-label select {
@@ -610,7 +610,7 @@ tbody tr:hover {
   border: 1px solid #d9e1ed;
   border-radius: 9px;
   background: white;
-  color: #172033;
+  color: #000000;
 }
 
 .checkout-button {
@@ -620,7 +620,7 @@ tbody tr:hover {
 }
 
 .payment-note {
-  color: #7a879a;
+  color: #000000;
   font-size: 12px;
   text-align: center;
   margin-bottom: 0;
@@ -709,7 +709,7 @@ tbody tr:hover {
   overflow-y: auto;
   padding: 30px;
   background: #ffffff;
-  color: #172033;
+  color: #000000;
   border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
 }
@@ -733,7 +733,7 @@ tbody tr:hover {
 
 .receipt-header p,
 .receipt-thanks {
-  color: #64748b;
+  color: #000000;
   font-size: 13px;
 }
 
@@ -772,7 +772,7 @@ tbody tr:hover {
 .receipt-table small {
   display: block;
   margin-top: 4px;
-  color: #64748b;
+  color: #000000;
 }
 
 .receipt-totals {
@@ -809,7 +809,7 @@ tbody tr:hover {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: white;
-  color: #172033;
+  color: #000000;
   font-weight: 600;
   cursor: pointer;
 }
@@ -972,7 +972,7 @@ tbody tr:hover {
 }
 
 .report-result-card span {
-  color: #6b7280;
+  color: #000000;
   font-size: 13px;
 }
 
@@ -1026,4 +1026,62 @@ tbody tr:hover {
   .report-result-card strong {
     font-size: 17px;
   }
+}
+
+/* Readability-only overrides: darken light-grey text in the main workspace.
+   Existing layout, component behaviour, button colours and application logic remain unchanged. */
+.main-content h1,
+.main-content h2,
+.main-content h3,
+.main-content h4,
+.main-content h5,
+.main-content h6,
+.main-content .stat-card h2,
+.main-content .panel-heading h2,
+.main-content .panel h2,
+.main-content .panel h3,
+.main-content .panel h4,
+.main-content td,
+.main-content .report-result-card strong,
+.main-content .payment-method-row strong,
+.main-content .stat-card p,
+.main-content .panel-heading p,
+.main-content .subtitle,
+.main-content .empty-state,
+.main-content .empty-state p,
+.main-content .empty-state h3,
+.main-content .page-footer,
+.main-content .payment-note,
+.main-content .report-result-card span,
+.main-content .summary-row,
+.main-content .summary-row strong,
+.main-content .payment-label,
+.main-content .receipt-card,
+.main-content .receipt-card p,
+.main-content .receipt-card small,
+.main-content .receipt-card td,
+.main-content .receipt-card th {
+  color: #000000 !important;
+}
+
+/* Keep intentional semantic colours and white text on buttons/status badges. */
+.main-content .stat-icon.blue { color: #2864e8 !important; }
+.main-content .stat-icon.green { color: #15803d !important; }
+.main-content .stat-icon.purple { color: #7c3aed !important; }
+.main-content .stat-icon.orange { color: #a85d00 !important; }
+.main-content .stock-badge { color: #166534 !important; }
+.main-content .stock-badge.low-stock { color: #b91c1c !important; }
+.main-content .sale-status { color: #187344 !important; }
+.main-content .edit-button { color: #92400e !important; }
+.main-content .delete-button { color: #b91c1c !important; }
+.main-content .primary-button,
+.main-content .checkout-button { color: #ffffff !important; }
+.main-content .total-row strong { color: #2864e8 !important; }
+
+/* Make chart labels readable where chart libraries render grey SVG text. */
+.main-content .recharts-text,
+.main-content .recharts-cartesian-axis-tick-value,
+.main-content .recharts-legend-item-text {
+  fill: #000000 !important;
+  color: #000000 !important;
 }

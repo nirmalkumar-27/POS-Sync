@@ -8,20 +8,32 @@ const cors = require("cors");
 require("dotenv").config();
 
 const saleRoutes = require("./routes/saleRoutes");
-
 const productRoutes = require("./routes/productRoutes");
-
 const dashboardRoutes = require("./routes/dashboardRoutes");
-
 const analyticsRoutes = require("./routes/analyticsRoutes");
-
 const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
+// CORS configuration
+const allowedOrigins = [
+    "http://localhost:5173",
+    ...(process.env.CLIENT_URLS || "")
+        .split(",")
+        .map((url) => url.trim())
+        .filter(Boolean)
+];
+
 app.use(
     cors({
-        origin: "http://localhost:5173"
+        origin: (origin, callback) => {
+            // Allow requests without an origin, such as health checks.
+            if (!origin || allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+
+            return callback(new Error("Not allowed by CORS"));
+        }
     })
 );
 
@@ -35,16 +47,18 @@ app.get("/", (req, res) => {
     });
 });
 
-// Product API
+// API routes
 app.use("/api/products", productRoutes);
 app.use("/api/sales", saleRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/auth", authRoutes);
+
+// Start backend
 async function startServer() {
     try {
         if (!process.env.MONGODB_URI) {
-            throw new Error("MONGODB_URI is missing from .env");
+            throw new Error("MONGODB_URI is missing");
         }
 
         await mongoose.connect(process.env.MONGODB_URI);
@@ -53,11 +67,10 @@ async function startServer() {
 
         const PORT = process.env.PORT || 5000;
 
-        app.listen(PORT, () => {
-            console.log(
-                `POS-Sync backend running on http://localhost:${PORT}`
-            );
+        app.listen(PORT, "0.0.0.0", () => {
+            console.log(`POS-Sync backend running on port ${PORT}`);
         });
+
     } catch (error) {
         console.error("Backend startup failed:", error.message);
         process.exit(1);

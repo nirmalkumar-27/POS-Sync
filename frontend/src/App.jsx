@@ -1502,6 +1502,490 @@ setMessage(
   );
 }
 
+
+function CustomerApp({ user, onLogout }) {
+  const [products, setProducts] = useState([]);
+  const [search, setSearch] = useState("");
+  const [cart, setCart] = useState([]);
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [page, setPage] = useState("shop");
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [receipt, setReceipt] = useState(null);
+  const customerQrScannerRef = useRef(null);
+  const customerQrProcessingRef = useRef(false);
+  const [showCustomerScanner, setShowCustomerScanner] = useState(false);
+  const [customerScannerMessage, setCustomerScannerMessage] = useState("");
+  const [customerQrProduct, setCustomerQrProduct] = useState(null);
+  const [customerQrImage, setCustomerQrImage] = useState("");
+
+  const money = (value) => Number(value || 0).toLocaleString("en-IN", {
+    style: "currency", currency: "INR"
+  });
+
+  async function loadProducts() {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await apiFetch(API_URL);
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || "Could not load products");
+      setProducts(data.products || []);
+    } catch (err) {
+      setError(err.message || "Could not load products");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadHistory() {
+    setHistoryLoading(true);
+    setError("");
+    try {
+      const response = await apiFetch(`${SALES_URL}/mine`);
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || "Could not load your payment history");
+      setHistory(data.sales || []);
+    } catch (err) {
+      setError(err.message || "Could not load your payment history");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  useEffect(() => { loadProducts(); }, []);
+
+  async function stopCustomerQrScanner() {
+    const scanner = customerQrScannerRef.current;
+    if (scanner) {
+      try {
+        if (scanner.isScanning) await scanner.stop();
+      } catch (err) {
+        console.error("Could not stop customer QR scanner:", err);
+      }
+      try {
+        scanner.clear();
+      } catch (err) {
+        console.error("Could not clear customer QR scanner:", err);
+      }
+      customerQrScannerRef.current = null;
+    }
+    setShowCustomerScanner(false);
+    customerQrProcessingRef.current = false;
+  }
+
+  async function startCustomerQrScanner() {
+    setError("");
+    setMessage("");
+    setCustomerScannerMessage("Starting camera...");
+    setShowCustomerScanner(true);
+    customerQrProcessingRef.current = false;
+
+    // Wait for the scanner element to be rendered before starting the camera.
+    window.setTimeout(async () => {
+      try {
+        if (customerQrScannerRef.current) return;
+        const scannerElement = document.getElementById("customer-pos-qr-reader");
+        if (!scannerElement) throw new Error("Scanner could not be initialized. Please try again.");
+
+        const scanner = new Html5Qrcode("customer-pos-qr-reader");
+        customerQrScannerRef.current = scanner;
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 230, height: 230 } },
+          async (decodedText) => {
+            if (customerQrProcessingRef.current) return;
+            customerQrProcessingRef.current = true;
+            setCustomerScannerMessage(`QR detected: ${decodedText}`);
+
+            try {
+              const barcodeValue = String(decodedText || "").trim();
+              if (!barcodeValue) throw new Error("The QR code is empty.");
+
+              const response = await apiFetch(
+                `${API_URL}/barcode/${encodeURIComponent(barcodeValue)}`
+              );
+              const data = await response.json();
+              if (!response.ok || !data.success || !data.product) {
+                throw new Error(data.message || "No product matches this QR code.");
+              }
+
+              const product = data.product;
+              addProduct(product);
+              setCustomerScannerMessage(`${product.name} scanned. Check your cart.`);
+              await stopCustomerQrScanner();
+              setPage("cart");
+            } catch (err) {
+              setCustomerScannerMessage(err.message || "Could not find that product.");
+              window.setTimeout(() => {
+                customerQrProcessingRef.current = false;
+              }, 1200);
+            }
+          },
+          () => {}
+        );
+        setCustomerScannerMessage("Camera ready. Point it at a product QR code.");
+      } catch (err) {
+        console.error("Customer QR scanner error:", err);
+        setCustomerScannerMessage(
+          err?.message || "Could not start the camera. Allow camera access and try again."
+        );
+        await stopCustomerQrScanner();
+        setError(
+          "Could not start the QR scanner. Check camera permissions and use localhost or HTTPS."
+        );
+      }
+    }, 120);
+  }
+
+  useEffect(() => {
+    return () => {
+      const scanner = customerQrScannerRef.current;
+      if (scanner) {
+        if (scanner.isScanning) {
+          scanner.stop().catch((err) => console.error("Could not stop customer QR scanner:", err));
+        }
+        try { scanner.clear(); } catch (err) {
+          console.error("Could not clear customer QR scanner:", err);
+        }
+      }
+    };
+  }, []);
+
+  async function generateCustomerQr(product) {
+    try {
+      const image = await QRCode.toDataURL(String(product.barcode), {
+        width: 280,
+        margin: 2,
+        errorCorrectionLevel: "H",
+      });
+      setCustomerQrProduct(product);
+      setCustomerQrImage(image);
+      setError("");
+    } catch (err) {
+      console.error("Customer QR generation error:", err);
+      setError("Could not generate the product QR code.");
+    }
+  }
+
+  function downloadCustomerQr() {
+    if (!customerQrImage || !customerQrProduct) return;
+    const anchor = document.createElement("a");
+    anchor.href = customerQrImage;
+    anchor.download = `POS-Sync-${String(customerQrProduct.name).replace(/[^a-z0-9-_]/gi, "-")}-QR.png`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  function addProduct(product) {
+    if (product.stock < 1) {
+      setError(`${product.name} is out of stock.`);
+      return;
+    }
+    setError("");
+    setMessage("");
+    setCart((previous) => {
+      const existing = previous.find((item) => item._id === product._id);
+      if (existing) {
+        if (existing.quantity >= product.stock) {
+          setError(`Only ${product.stock} unit(s) of ${product.name} are available.`);
+          return previous;
+        }
+        return previous.map((item) => item._id === product._id
+          ? { ...item, quantity: item.quantity + 1 } : item);
+      }
+      return [...previous, { ...product, quantity: 1 }];
+    });
+  }
+
+  function changeQuantity(productId, delta) {
+    setCart((previous) => previous.map((item) => {
+      if (item._id !== productId) return item;
+      const next = item.quantity + delta;
+      if (next < 1) return item;
+      if (next > item.stock) {
+        setError(`Only ${item.stock} unit(s) are available.`);
+        return item;
+      }
+      return { ...item, quantity: next };
+    }));
+  }
+
+  const subtotalPaise = cart.reduce((sum, item) => sum + Math.round(Number(item.price) * 100) * item.quantity, 0);
+  const subtotal = subtotalPaise / 100;
+  const tax = Math.round(subtotalPaise * 0.05) / 100;
+  const total = subtotal + tax;
+  const filteredProducts = products.filter((product) => {
+    const query = search.trim().toLowerCase();
+    return !query || [product.name, product.barcode, product.category]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+  });
+
+  async function checkout() {
+    if (!cart.length) {
+      setError("Add at least one product to your cart before checkout.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await apiFetch(`${SALES_URL}/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: cart.map((item) => ({ productId: item._id, quantity: item.quantity })),
+          paymentMethod,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || "Checkout failed");
+      setReceipt(data.sale);
+      setCart([]);
+      setMessage("Order completed successfully.");
+      await Promise.all([loadProducts(), loadHistory()]);
+      setPage("history");
+    } catch (err) {
+      setError(err.message || "Checkout failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function downloadReceipt(sale) {
+    const lines = [
+      "POS-Sync - Purchase Receipt",
+      `Receipt ID: ${sale._id}`,
+      `Date: ${sale.createdAt ? new Date(sale.createdAt).toLocaleString() : new Date().toLocaleString()}`,
+      `Customer: ${user?.name || user?.email || "Customer"}`,
+      `Payment method: ${sale.paymentMethod}`,
+      "----------------------------------------",
+      ...(sale.items || []).map((item) =>
+        `${item.name} x ${item.quantity} @ ${money(item.price)} = ${money(item.subtotal)}`
+      ),
+      "----------------------------------------",
+      `Subtotal: ${money(sale.subtotal)}`,
+      `Tax: ${money(sale.tax)}`,
+      `TOTAL: ${money(sale.total)}`,
+      `Status: ${sale.status || "Completed"}`,
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `POS-Sync-Receipt-${String(sale._id || "order").slice(-8)}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function printReceipt(sale) {
+    const itemRows = (sale.items || []).map((item) =>
+      `<tr><td>${String(item.name || "").replace(/[&<>"]/g, "")} × ${item.quantity}</td><td>${money(item.subtotal)}</td></tr>`
+    ).join("");
+    const content = `<!doctype html><html><head><title>POS-Sync Receipt</title>
+      <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{text-align:center}
+      table{width:100%;border-collapse:collapse}td{padding:8px;border-bottom:1px solid #ddd}
+      td:last-child{text-align:right}.total{font-weight:bold;font-size:20px}</style></head><body>
+      <h1>POS-Sync</h1><p>Receipt: ${sale._id}</p>
+      <p>Date: ${sale.createdAt ? new Date(sale.createdAt).toLocaleString() : new Date().toLocaleString()}</p>
+      <p>Payment: ${sale.paymentMethod}</p><table>${itemRows}</table>
+      <p>Subtotal: ${money(sale.subtotal)}</p><p>Tax: ${money(sale.tax)}</p>
+      <p class="total">Total: ${money(sale.total)}</p><p>Status: ${sale.status || "Completed"}</p>
+      <script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}</script></body></html>`;
+    const printWindow = window.open("", "_blank", "width=600,height=700");
+    if (!printWindow) {
+      setError("Your browser blocked the receipt window. Allow pop-ups and try again.");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(content);
+    printWindow.document.close();
+  }
+
+  function navigate(nextPage) {
+    setPage(nextPage);
+    setError("");
+    setMessage("");
+    if (nextPage === "history") loadHistory();
+  }
+
+  const panelStyle = {
+    background: "#fff", border: "1px solid #e3eaf4", borderRadius: "16px",
+    padding: "22px", boxShadow: "0 8px 24px rgba(15, 35, 65, .05)"
+  };
+  const buttonStyle = {
+    border: 0, borderRadius: "9px", padding: "11px 15px",
+    background: "#2864e8", color: "#fff", fontWeight: 700, cursor: "pointer"
+  };
+
+  return (
+    <div className="customer-shell" style={{ minHeight: "100vh", display: "flex", background: "#f3f6fb", color: "#111827", fontFamily: "Arial, sans-serif" }}>
+      <aside style={{ width: "245px", flexShrink: 0, background: "#101c32", color: "#fff", padding: "24px 16px", display: "flex", flexDirection: "column", gap: "18px" }}>
+        <div style={{ padding: "6px 8px 24px", borderBottom: "1px solid #31405a" }}>
+          <h2 style={{ margin: "0 0 8px", fontSize: "25px" }}>POS-Sync</h2>
+          <div style={{ color: "#b8c7e0" }}>Customer Store</div>
+        </div>
+        <button style={{ ...buttonStyle, textAlign: "left", background: page === "shop" ? "#2864e8" : "transparent" }} onClick={() => navigate("shop")}>🛍 Browse Products</button>
+        <button style={{ ...buttonStyle, textAlign: "left", background: "transparent", border: "1px solid #52627b" }} onClick={startCustomerQrScanner}>📷 Scan Product QR</button>
+        <button style={{ ...buttonStyle, textAlign: "left", background: page === "cart" ? "#3d5b8f" : "transparent" }} onClick={() => navigate("cart")}>🛒 My Cart ({cart.reduce((n, item) => n + item.quantity, 0)})</button>
+        <button style={{ ...buttonStyle, textAlign: "left", background: page === "history" ? "#3d5b8f" : "transparent" }} onClick={() => navigate("history")}>🧾 My Payment History</button>
+        <button style={{ ...buttonStyle, textAlign: "left", background: page === "dashboard" ? "#3d5b8f" : "transparent", border: "1px solid #52627b" }} onClick={() => navigate("dashboard")}>📊 Sales Dashboard</button>
+        <div style={{ marginTop: "auto", color: "#c5d1e5", overflowWrap: "anywhere" }}>
+          Signed in as {user?.name || user?.email}
+          <button style={{ ...buttonStyle, width: "100%", marginTop: "14px", background: "#fff", color: "#111827" }} onClick={onLogout}>Log out</button>
+        </div>
+      </aside>
+      <main style={{ flex: 1, minWidth: 0, padding: "30px clamp(16px, 3vw, 44px)" }}>
+        <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "16px", marginBottom: "24px" }}>
+          <div>
+            <div style={{ color: "#2864e8", letterSpacing: "2px", fontWeight: 800, fontSize: "12px" }}>CUSTOMER PORTAL</div>
+            <h1 style={{ margin: "8px 0", fontSize: "clamp(26px, 3vw, 36px)", color: "#111827" }}>
+              {page === "shop" ? "Browse Products" : page === "cart" ? "Your Shopping Cart" : page === "dashboard" ? "Sales Dashboard" : "My Payment History"}
+            </h1>
+            <p style={{ margin: 0, color: "#4b5563" }}>
+              {page === "dashboard"
+                ? "This area is reserved for administrator accounts."
+                : `Welcome, ${user?.name || user?.email}. Shop and manage your purchases here.`}
+            </p>
+          </div>
+          {page === "shop" && <button style={buttonStyle} onClick={() => navigate("cart")}>View Cart ({cart.reduce((n, item) => n + item.quantity, 0)})</button>}
+        </header>
+
+        {message && <div role="status" style={{ ...panelStyle, marginBottom: "16px", color: "#166534", borderColor: "#bbf7d0" }}>{message}</div>}
+        {error && <div role="alert" style={{ ...panelStyle, marginBottom: "16px", color: "#b91c1c", borderColor: "#fecaca" }}>{error}<button style={{ float: "right", border: 0, background: "transparent", cursor: "pointer" }} onClick={() => setError("")}>×</button></div>}
+
+        {page === "shop" && <>
+          <div style={{ ...panelStyle, marginBottom: "20px" }}>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products by name, barcode or category..."
+              aria-label="Search products" style={{ width: "100%", boxSizing: "border-box", padding: "14px", border: "1px solid #cbd5e1", borderRadius: "10px", fontSize: "16px", color: "#111827" }} />
+          </div>
+          {loading ? <p>Loading products...</p> : filteredProducts.length === 0 ? <div style={panelStyle}>No products found.</div> :
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: "18px" }}>
+              {filteredProducts.map((product) => <article key={product._id} style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div style={{ fontSize: "12px", color: "#64748b", textTransform: "uppercase", letterSpacing: "1px" }}>{product.category}</div>
+                <h3 style={{ margin: 0, fontSize: "20px" }}>{product.name}</h3>
+                <div style={{ fontSize: "23px", fontWeight: 800, color: "#111827" }}>{money(product.price)}</div>
+                <div style={{ color: product.stock > 0 ? "#166534" : "#b91c1c" }}>{product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}</div>
+                <div style={{ color: "#64748b", fontSize: "13px" }}>Barcode: {product.barcode}</div>
+                <button style={{ ...buttonStyle, marginTop: "auto", opacity: product.stock > 0 ? 1 : .5 }} disabled={product.stock < 1} onClick={() => addProduct(product)}>Add to Cart</button>
+                <button style={{ ...buttonStyle, background: "#fff", color: "#1d4ed8", border: "1px solid #bfdbfe" }} onClick={() => generateCustomerQr(product)}>Generate QR Code</button>
+              </article>)}
+            </div>}
+        </>}
+
+        {page === "cart" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: "20px", alignItems: "start" }}>
+          <section style={panelStyle}>
+            <h2 style={{ marginTop: 0 }}>Cart Items</h2>
+            {!cart.length ? <p>Your cart is empty. Browse products to add items.</p> : cart.map((item) => <div key={item._id} style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid #e5e7eb" }}>
+              <div><strong>{item.name}</strong><div style={{ color: "#64748b" }}>{money(item.price)} each</div></div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button aria-label={`Decrease ${item.name}`} onClick={() => changeQuantity(item._id, -1)}>-</button>
+                <strong>{item.quantity}</strong>
+                <button aria-label={`Increase ${item.name}`} onClick={() => changeQuantity(item._id, 1)}>+</button>
+                <button onClick={() => setCart((previous) => previous.filter((p) => p._id !== item._id))}>Remove</button>
+              </div>
+              <strong>{money(item.price * item.quantity)}</strong>
+            </div>)}
+            <button style={{ ...buttonStyle, marginTop: "16px", background: "#475569" }} onClick={() => navigate("shop")}>Continue Shopping</button>
+          </section>
+          <section style={panelStyle}>
+            <h2 style={{ marginTop: 0 }}>Order Summary</h2>
+            <p style={{ display: "flex", justifyContent: "space-between" }}><span>Subtotal</span><strong>{money(subtotal)}</strong></p>
+            <p style={{ display: "flex", justifyContent: "space-between" }}><span>Tax (5%)</span><strong>{money(tax)}</strong></p>
+            <p style={{ display: "flex", justifyContent: "space-between", fontSize: "21px" }}><span>Total</span><strong>{money(total)}</strong></p>
+            <label htmlFor="customer-payment" style={{ display: "block", margin: "18px 0 8px", fontWeight: 700 }}>Payment Method</label>
+            <select id="customer-payment" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={{ width: "100%", padding: "12px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "14px" }}>
+              <option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Card">Card</option>
+            </select>
+            <button style={{ ...buttonStyle, width: "100%", opacity: busy || !cart.length ? .6 : 1 }} disabled={busy || !cart.length} onClick={checkout}>{busy ? "Processing..." : `Complete Purchase · ${money(total)}`}</button>
+            <p style={{ fontSize: "12px", color: "#64748b" }}>Payment method is recorded with your order. Online payment gateway processing is not configured.</p>
+          </section>
+        </div>}
+
+        {page === "dashboard" && <section style={{ ...panelStyle, maxWidth: "760px", margin: "48px auto", textAlign: "center", padding: "clamp(28px, 5vw, 56px)" }}>
+          <div style={{ fontSize: "56px", marginBottom: "12px" }} aria-hidden="true">🔒</div>
+          <h2 style={{ margin: "0 0 14px", color: "#111827", fontSize: "30px" }}>Welcome to POS-Sync</h2>
+          <p style={{ color: "#374151", fontSize: "17px", lineHeight: 1.7, margin: "0 auto 12px", maxWidth: "600px" }}>
+            Hello {user?.name || user?.email}. You are signed in as a regular user.
+          </p>
+          <p style={{ color: "#374151", fontSize: "16px", lineHeight: 1.7, margin: "0 auto 24px", maxWidth: "600px" }}>
+            The Sales Dashboard and inventory management features are available to administrator accounts only. You can continue shopping in the customer portal or log out of your account.
+          </p>
+          <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "12px" }}>
+            <button style={buttonStyle} onClick={() => navigate("shop")}>Browse Products</button>
+            <button style={{ ...buttonStyle, background: "#475569" }} onClick={onLogout}>Log Out</button>
+          </div>
+        </section>}
+
+        {page === "history" && <section style={panelStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
+            <h2 style={{ marginTop: 0 }}>Your Purchases</h2>
+            <button style={buttonStyle} onClick={loadHistory} disabled={historyLoading}>{historyLoading ? "Refreshing..." : "Refresh History"}</button>
+          </div>
+          {receipt && <div style={{ padding: "16px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "10px", marginBottom: "16px" }}>
+            <strong>Purchase successful!</strong><p style={{ margin: "8px 0" }}>Receipt: {receipt._id} · Total: {money(receipt.total)}</p>
+            <button style={buttonStyle} onClick={() => downloadReceipt(receipt)}>Download Receipt</button>{" "}
+            <button style={{ ...buttonStyle, background: "#475569" }} onClick={() => printReceipt(receipt)}>Print Receipt</button>
+          </div>}
+          {historyLoading ? <p>Loading your purchases...</p> : history.length === 0 ? <p>You don't have any completed purchases yet.</p> :
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: "650px" }}>
+              <thead><tr>{["Receipt", "Date", "Items", "Payment", "Total", "Actions"].map((heading) => <th key={heading} style={{ textAlign: "left", padding: "12px", background: "#f1f5f9", color: "#111827" }}>{heading}</th>)}</tr></thead>
+              <tbody>{history.map((sale) => <tr key={sale._id}>
+                <td style={{ padding: "12px", borderBottom: "1px solid #e5e7eb" }}>{String(sale._id).slice(-8)}</td>
+                <td style={{ padding: "12px", borderBottom: "1px solid #e5e7eb" }}>{sale.createdAt ? new Date(sale.createdAt).toLocaleString() : "—"}</td>
+                <td style={{ padding: "12px", borderBottom: "1px solid #e5e7eb" }}>{(sale.items || []).map((item) => `${item.name} × ${item.quantity}`).join(", ")}</td>
+                <td style={{ padding: "12px", borderBottom: "1px solid #e5e7eb" }}>{sale.paymentMethod}</td>
+                <td style={{ padding: "12px", borderBottom: "1px solid #e5e7eb", fontWeight: 700 }}>{money(sale.total)}</td>
+                <td style={{ padding: "12px", borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap" }}><button onClick={() => downloadReceipt(sale)}>Download</button>{" "}<button onClick={() => printReceipt(sale)}>Print</button></td>
+              </tr>)}</tbody>
+            </table></div>}
+        </section>}
+        <footer style={{ padding: "24px 0", color: "#64748b", fontSize: "13px" }}>POS-Sync · Customer Shopping Portal</footer>
+      </main>
+
+      {showCustomerScanner && (
+        <div role="dialog" aria-modal="true" aria-label="Scan product QR code"
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15, 23, 42, .72)", display: "grid", placeItems: "center", padding: "18px" }}>
+          <section style={{ ...panelStyle, width: "min(520px, 100%)", boxSizing: "border-box" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+              <h2 style={{ marginTop: 0 }}>Scan Product QR Code</h2>
+              <button style={{ ...buttonStyle, background: "#475569" }} onClick={stopCustomerQrScanner}>Close</button>
+            </div>
+            <p style={{ color: "#475569" }}>Allow camera access and point it at a QR code generated for a product in POS-Sync.</p>
+            <div id="customer-pos-qr-reader" style={{ width: "100%", overflow: "hidden" }} />
+            {customerScannerMessage && <p role="status" style={{ color: "#111827", overflowWrap: "anywhere" }}>{customerScannerMessage}</p>}
+            <button style={{ ...buttonStyle, background: "#475569" }} onClick={stopCustomerQrScanner}>Stop Scanner</button>
+          </section>
+        </div>
+      )}
+
+      {customerQrProduct && customerQrImage && (
+        <div role="dialog" aria-modal="true" aria-label="Product QR code"
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15, 23, 42, .72)", display: "grid", placeItems: "center", padding: "18px" }}>
+          <section style={{ ...panelStyle, width: "min(420px, 100%)", boxSizing: "border-box", textAlign: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+              <h2 style={{ marginTop: 0 }}>Product QR Code</h2>
+              <button style={{ ...buttonStyle, background: "#475569" }} onClick={() => { setCustomerQrProduct(null); setCustomerQrImage(""); }}>Close</button>
+            </div>
+            <h3>{customerQrProduct.name}</h3>
+            <p>Barcode: {customerQrProduct.barcode}</p>
+            <img src={customerQrImage} alt={`QR code for ${customerQrProduct.name}`} style={{ width: "min(280px, 100%)", height: "auto" }} />
+            <p style={{ color: "#475569", fontSize: "13px" }}>This QR code contains the product barcode only.</p>
+            <button style={buttonStyle} onClick={downloadCustomerQr}>Download QR Code</button>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -1568,16 +2052,7 @@ function App() {
   }
 
   if (user.role !== "admin") {
-    return (
-      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: "24px", fontFamily: "Arial, sans-serif", background: "#f4f7fb" }}>
-        <section style={{ maxWidth: "520px", width: "100%", background: "white", padding: "32px", borderRadius: "16px", boxShadow: "0 10px 35px rgba(0,0,0,0.08)" }}>
-          <h1 style={{ marginTop: 0 }}>Welcome to POS-Sync</h1>
-          <p>Hello {user.name || user.email}! You are signed in as a regular user.</p>
-          <p>The inventory management and staff checkout workspace is available to administrator accounts only.</p>
-          <button className="primary-button" onClick={handleLogout}>Log out</button>
-        </section>
-      </div>
-    );
+    return <CustomerApp user={user} onLogout={handleLogout} />;
   }
 
   return <POSApp user={user} onLogout={handleLogout} />;

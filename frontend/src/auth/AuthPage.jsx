@@ -376,7 +376,7 @@ export default function AuthPage({ onAuthenticated }) {
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} autoComplete="off">
                     {isRegister && (
                         <div style={styles.field}>
                             <label style={styles.label} htmlFor="auth-name">
@@ -405,7 +405,7 @@ export default function AuthPage({ onAuthenticated }) {
                         <input
                             id="auth-email"
                             type="email"
-                            autoComplete="email"
+                            autoComplete="off"
                             value={email}
                             onChange={(event) => setEmail(event.target.value)}
                             placeholder="you@example.com"
@@ -423,11 +423,7 @@ export default function AuthPage({ onAuthenticated }) {
                             <input
                                 id="auth-password"
                                 type={showPassword ? "text" : "password"}
-                                autoComplete={
-                                    isRegister
-                                        ? "new-password"
-                                        : "current-password"
-                                }
+                                autoComplete="new-password"
                                 value={password}
                                 onChange={(event) => setPassword(event.target.value)}
                                 placeholder={
