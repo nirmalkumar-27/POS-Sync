@@ -19,10 +19,10 @@ import {
 import "./App.css";
 import AuthPage from "./auth/AuthPage";
 
-const API_URL = "http://localhost:5000/api/products";
-const SALES_URL = "http://localhost:5000/api/sales";
-const DASHBOARD_URL = "http://localhost:5000/api/dashboard";
-const ANALYTICS_URL = "http://localhost:5000/api/analytics";
+const API_URL = `${import.meta.env.VITE_API_URL}/products`;
+const SALES_URL = `${import.meta.env.VITE_API_URL}/sales`;
+const DASHBOARD_URL = `${import.meta.env.VITE_API_URL}/dashboard`;
+const ANALYTICS_URL = `${import.meta.env.VITE_API_URL}/analytics`;
 const TAX_RATE = 0.05;
 
 // Attach the logged-in user's token to POS API requests.
@@ -2001,7 +2001,7 @@ function App() {
       }
 
       try {
-        const response = await fetch("http://localhost:5000/api/auth/me", {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await response.json();
